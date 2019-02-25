@@ -18,11 +18,7 @@ add_executable(Diplom
         cmake-build-debug/Diplom.cbp
         cmake-build-debug/Diplom.exe
         cmake-build-debug/Makefile
-        alanin.psf
-        alanin.txt
-        alanin.txt.txt
         CMakeLists.txt
-        dna.psf
         gradient_method.cpp
         gradient_method.h
         graph.cpp
