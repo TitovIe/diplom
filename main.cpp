@@ -15,13 +15,16 @@ int main() {
     atom.Create_xyz(input_xyz);
     PrintAll(atom);
     */
-    random_device rd;
-    mt19937 gen;
-    gen.seed(rd());
 
-    Graph graph(gen, rd);
+    mt19937 gen;
+    gen.seed(time(0));
+
+    Graph graph(gen);
+    graph.Print_Ji();
+
     Graph_reconst_calc(graph, 0.00005);
     graph.Print_Ji();
+    //graph.Print_graph();
     //cout << S_calculate(graph);
     //cout << Gradient();
 

@@ -1,6 +1,6 @@
 #include "gradient_method.h"
 
-/*Оператор, реализующий сумму элементов вектора1 на элементы вектора2 */
+/*Оператор, реализующий сумму элементов вектора1 и вектора2 */
 template <typename T>
 vector<T> operator+ (const vector<T>& v1,
         const vector<T>& v2){
@@ -12,7 +12,7 @@ vector<T> operator+ (const vector<T>& v1,
     return v_new;
 }
 
-/*Оператор, реализующий разность элементов вектора1 на элементы вектора2 */
+/*Оператор, реализующий разность элементов вектора1 и вектора2 */
 template <typename T>
 vector<T> operator- (const vector<T>& v1,
                      const vector<T>& v2){
@@ -44,14 +44,6 @@ vector<double> operator/ (const vector<T>& v, K number){
     return v_new;
 }
 
-/*Вычисление  сумму по j: Sum(-Jij * sigmai * sigmaj) */
-double Jij_sigma_calc(Sample& s, int i, int j,
-        const vector<double>& Ji_vector) {
-    return -Ji_vector[j]
-           * s.Get_sigma_vector()[j]
-           * s.Get_sigma_vector()[i];
-}
-
 /*Вычсление градиента от натур. логорифма Si для i узла */
 vector<double> Ln_Si_grad_calc(const vector<double>& Si_grad,
                               double Si) {
@@ -59,10 +51,9 @@ vector<double> Ln_Si_grad_calc(const vector<double>& Si_grad,
 }
 
 /*Вычисление нормы Ji*/
-double Ji_norm_calc(const vector<double>& Ji, int i){
+double Ji_norm_calc(const vector<double>& Ji){
     double Ji_norm = 0;
     for(int j = 0; j < Ji.size(); j++){
-        if(i != j)
             Ji_norm += abs(j);
     }
     return Ji_norm;
@@ -80,23 +71,33 @@ Si_calc(Graph& g, int i, const vector<double>& Ji_vector) {
     double Jij_sigma_sum = 0;
     double Si = 0;
     double Ln_Si = 0;
-    vector<double> Si_grad(Graph::N);
-    vector<double> Ln_Si_grad(Graph::N);
+    vector<double> Si_grad(Graph::N - 1);
+    vector<double> Ln_Si_grad(Graph::N - 1);
 
     for (auto &m : g.Get_m_samples()) {
-        for (int j = 0; j < Graph::N; j++) {
-            if (j != i) {
-                /*Считаем сумму по j: Sum(-Jij * sigmai * sigmaj)
-                 * для одной выборки */
-                Jij_sigma_sum += Jij_sigma_calc(m, i, j, Ji_vector);
-            }
+        for (int j = 0, k = 0; j < Graph::N - 1; j++, k++) {
+            if (k == i)
+                k++;
+
+            /*Считаем сумму по j: Sum(-Jij * sigmai * sigmaj)
+            * для одной выборки */
+            Jij_sigma_sum += -Ji_vector[j]
+                    * m.Get_sigma_vector()[k]
+                    * m.Get_sigma_vector()[i];
         }
         /*Считаем сумму для M выборок, чтобы найти среднее.
          * Также находим градиент от Si,
          * в цикле - сумму градиенов для М выборок */
         s_sum += exp(Jij_sigma_sum);
-        Si_grad = Si_grad + m.Get_sigma_vector()
-                            * exp(Jij_sigma_sum);
+
+        for(int j = 0, k = 0; j < Graph::N - 1; j++, k++){
+            if(k == i)
+                k++;
+
+            Si_grad[j] += m.Get_sigma_vector()[k]
+                    * exp(Jij_sigma_sum);
+        }
+
         Jij_sigma_sum = 0;
     }
     /*Находим средний градиент по M выборкам
@@ -110,34 +111,6 @@ Si_calc(Graph& g, int i, const vector<double>& Ji_vector) {
     Ln_Si_grad = Ln_Si_grad_calc(Si_grad, Si);
 
     return {Ln_Si, Ln_Si_grad};
-}
-
-/*Генерируем стартовый вектор*/
-vector<vector<double>> Gen_Ji_start_vector(){
-    vector<vector<double>> Ji_start_vector;
-    random_device rd;
-    mt19937 gen;
-    gen.seed(rd());
-    uniform_real_distribution<> urd_right(Graph::alfa, Graph::beta);
-    uniform_real_distribution<> urd_left(-Graph::beta, -Graph::alfa);
-    uniform_int_distribution<int> urd_false_true(0, 1);
-
-    for(int i = 0; i < Graph::N; i++) {
-        vector<double> Jij_start_vector;
-        for (int j = 0; j < Graph::N; j++) {
-            if (urd_false_true(gen) == 0) {
-                Jij_start_vector.push_back(urd_left(gen));
-            } else Jij_start_vector.push_back(urd_right(gen));
-        }
-        Ji_start_vector.push_back(Jij_start_vector);
-    }
-
-    for(const auto& i : Ji_start_vector){
-        cout << i << endl;
-    }
-    cout << endl;
-
-    return Ji_start_vector;
 }
 
 /*Нахождение минимума с помощью градиентного спуска*/
@@ -155,17 +128,17 @@ void Arg_min_calc(Graph& g, double eps,
             Ji1 = Ji0;
             F_prev = Si_calc(g, i, Ji0);
             Func_value_prev = Func(F_prev.first, lambda,
-                                   Ji_norm_calc(Ji0, i));
+                                   Ji_norm_calc(Ji0));
             Func_grad_prev = F_prev.second;
 
-            for(int j = 0; j < Graph::N; j++) {
+            for(int j = 0; j < Graph::N - 1; j++) {
                 if(Ji1[j] != 0)
                     Ji1[j] = Ji0[j] - Func_grad_prev[j] * h;
             }
 
             F_new = Si_calc(g, i, Ji1);
             Func_value_new = Func(F_new.first, lambda,
-                                  Ji_norm_calc(Ji1, i));
+                                  Ji_norm_calc(Ji1));
             Func_grad_new = F_new.second;
 
             if (Func_value_new > Func_value_prev)
@@ -185,17 +158,15 @@ void Arg_min_calc(Graph& g, double eps,
 /*Приводим к нулю Jij такие,которые < alfa/2 */
 void Jij_to_zero(Graph& g){
     for(int i = 0; i < Graph::N; i++){
-        for(int j = 0; j < Graph::N; j++){
-            if(j != i){
-                g.Get_Ji_vector()[i][j] = (g.Get_Ji_vector()[i][j]
-                                           + g.Get_Ji_vector()[j][i]) / 2;
+        for(int j = i; j < Graph::N - 1; j++){
+            g.Get_Ji_vector()[i][j] = (g.Get_Ji_vector()[i][j]
+                    + g.Get_Ji_vector()[j + 1][i]) / 2;
 
-                if(g.Get_Ji_vector()[i][j] > -Graph::alfa / 2
-                   && g.Get_Ji_vector()[i][j] < Graph::alfa / 2)
-                    g.Get_Ji_vector()[i][j] = 0;
+            if(g.Get_Ji_vector()[i][j] > -Graph::alfa / 2
+            && g.Get_Ji_vector()[i][j] < Graph::alfa / 2)
+                g.Get_Ji_vector()[i][j] = 0;
 
-                g.Get_Ji_vector()[j][i] = g.Get_Ji_vector()[i][j];
-            }
+            g.Get_Ji_vector()[j + 1][i] = g.Get_Ji_vector()[i][j];
         }
     }
 }
@@ -206,17 +177,17 @@ void Graph_reconst_calc(Graph& g, double eps){
     double lambda =
             c_lambda * sqrt(log(pow(Graph::N, 2) / eps) / Graph::M);
 
-    g.Get_Ji_vector() = Gen_Ji_start_vector();
     Arg_min_calc(g, eps, g.Get_Ji_vector(), lambda);
     Jij_to_zero(g);
 
     /*Повторяем тоже самое для lambda = 0,
-     * чтобы получить искомы граф*/
+     * чтобы получить искомый граф*/
     lambda = 0;
     Arg_min_calc(g, eps, g.Get_Ji_vector(), lambda);
     Jij_to_zero(g);
 }
 
+/*
 vector<double> Gradient(){
     vector<double> start = {4,5};
     vector<double> finish = start;
@@ -236,7 +207,7 @@ vector<double> Gradient(){
     } while (abs(Func_value_new - Func_value_prev) > eps);
     return finish;
 }
-
+*/
 
 
 

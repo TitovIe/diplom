@@ -1,4 +1,6 @@
 #pragma once
+
+#include <iomanip>
 #include <map>
 #include <memory>
 #include <set>
@@ -11,9 +13,9 @@ using namespace std;
 
 class Sample {
 public:
-    Sample(mt19937& gen, random_device& rd);
-    void Print_sample();
+    explicit Sample(mt19937& gen);
     vector<int>& Get_sigma_vector();
+    void Print_sample();
 private:
     vector<int> sigma_vector;
     const pair<int, int> sigma_value = {-1, 1};
@@ -21,11 +23,12 @@ private:
 
 class Graph {
 public:
-    Graph(mt19937& gen, random_device& rd);
-    void Print_graph();
-    void Print_Ji();
+    explicit Graph(mt19937& gen);
     vector<Sample>& Get_m_samples();
     vector<vector<double>>& Get_Ji_vector();
+    void Gen_Ji_start_vector(mt19937& gen);
+    void Print_sigma();
+    void Print_Ji();
 
     static const int M = 5000, N = 25, beta = 1;
     static constexpr double alfa = 0.4;
