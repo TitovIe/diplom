@@ -53,7 +53,7 @@ vector<double> Ln_Si_grad_calc(const vector<double>& Si_grad,
 /*Вычисление нормы Ji*/
 double Ji_norm_calc(const vector<double>& Ji){
     double Ji_norm = 0;
-    for(int j = 0; j < Ji.size(); j++){
+    for(const auto& j : Ji){
             Ji_norm += abs(j);
     }
     return Ji_norm;
