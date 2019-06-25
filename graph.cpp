@@ -1,4 +1,5 @@
 #include "graph.h"
+#include <fstream>
 
 Graph::Graph(mt19937& gen){
     Gen_Ji_start_vector(gen);
@@ -6,7 +7,30 @@ Graph::Graph(mt19937& gen){
 }
 
 void Graph::Gen_sigma_vector(mt19937 &gen) {
-    MonteCarlo(sigmai_vector, gen);
+    //Glauber(sigmai_vector, gen);
+    int number_conff, spin, number_conff_all = 0;
+    string line;
+    stringstream ls;
+    ifstream file_spin("/home/titov/CLionProjects/Diplom_ver2/samples.txt");
+    if (file_spin.is_open())
+    {
+        while (getline(file_spin, line))
+        {
+            ls << line;
+            ls >> number_conff;
+            number_conff_all += number_conff;
+            vector<int> spins;
+            while(!ls.eof()){
+                ls.ignore(1);
+                ls >> spin;
+                spins.push_back(spin);
+            }
+            ls.clear();
+            sigmai_vector.push_back({number_conff, spins});
+        }
+        sigmai_vector.pop_back();
+    }
+    file_spin.close();
 }
 
 /*Генерируем стартовые векторы Jij и pij*/
@@ -36,43 +60,23 @@ void Graph::Gen_Ji_start_vector(mt19937& gen){
                 Ji_vector[i][j] = urd_left(gen);
             } else Ji_vector[i][j] = urd_right(gen);
             Ji_vector[j + 1][i] = Ji_vector[i][j];
-            constraint_vector[i][j] = 10;
+            constraint_vector[i][j] = 1 / lambda * Ji_vector[i][j];
             constraint_vector[j + 1][i] = constraint_vector[i][j];
         }
     }
 }
 
 //Генерация M выборок спинов методом метрополиса
-void MonteCarlo(vector<vector<int>>& samples, mt19937 &gen){
+void Glauber(vector<vector<int>>& samples,
+                const vector<vector<double>>& Jij_true, mt19937 &gen){
 
     uniform_int_distribution<int> urd_false_true(0, 1);
     uniform_real_distribution<double> probability(0, 1);
     uniform_int_distribution<int> choise_spin(0, Graph::N - 1);
-
-    const int T = 5;
-    //const double k = 1.38 * pow(10, -23);
-    //const double beta = 1/T;
-
+    
     const int number_step = 100;
     int number_spin;
-    double E_prev, E_after, E_delta;
-
-    // Данные, которые хотим получить
-    vector<vector<double>> Jij_true;
-    Jij_true.push_back({0.7, 0, 0});
-    Jij_true.push_back({0.7, 0.41, 0});
-    Jij_true.push_back({0, 0.41, 0.5});
-    Jij_true.push_back({0, 0, 0.5});
-
-//    Jij_true.push_back({0.7, 0, 0.5, 0, 0.6, -0.4, 0.59, 0.8});
-//    Jij_true.push_back({0.7, 0.41, 0, -0.8, 0, 0.6, -0,5, 0.8});
-//    Jij_true.push_back({0, 0.41, 0, -0.5, 0, 0, 0.5, 0});
-//    Jij_true.push_back({0.5, 0, 0, 0.4, -0.46, 0, 0, -0.8});
-//    Jij_true.push_back({0, -0.8, -0.5, 0.4, 0.9, -0.55, 0, -0.7});
-//    Jij_true.push_back({0.6, 0, 0, -0.46, 0.9, 0, 0.9, 0});
-//    Jij_true.push_back({-0.4, 0.6, 0, 0, -0.55, 0, 0, 0});
-//    Jij_true.push_back({0.59, -0.5, 0.5, 0, 0, 0.9, 0, 0});
-//    Jij_true.push_back({0.8, 0.8, 0, -0.8, -0.7, 0, 0, 0});
+    double E;
     
     // Начальная конфигурация рандомно заполняется
     vector<int> sigma_vector;
@@ -91,18 +95,13 @@ void MonteCarlo(vector<vector<int>>& samples, mt19937 &gen){
     for(int j = 0; j < Graph::M; j++) {
         for (int i = 0; i < number_step; i++){
             
-            
             number_spin = choise_spin(gen);
-            E_prev = Jij_sum_calc(Jij_true, sigma_vector);
-
-            sigma_vector[number_spin] *= -1;
-            E_after = Jij_sum_calc(Jij_true, sigma_vector);
-            E_delta = E_after - E_prev;
-
-            if(E_delta > 0){
-                if(probability(gen) > exp(-E_delta / T))
-                    sigma_vector[number_spin] *= -1;
-            }
+            E = Jij_sum_calc(Jij_true, sigma_vector, number_spin);
+            
+            if(probability(gen) > 1 / (1 + exp(-2 * E)))
+                sigma_vector[number_spin] = 1;
+            else
+                sigma_vector[number_spin] = -1;
         }
         samples.push_back(sigma_vector);
     }
@@ -110,20 +109,20 @@ void MonteCarlo(vector<vector<int>>& samples, mt19937 &gen){
 
 //Считаем энергию системы
 double Jij_sum_calc(const vector<vector<double>>& Jij_vector,
-        const vector<int>& sigma_vector){
+        const vector<int>& sigma_vector, int i){
     double Jij_sum = 0;
-    for(int i = 0; i < Jij_vector.size(); i++){
-        for(int j = i, k = j + 1; j < Jij_vector[i].size(); j++, k++){
+    for(int j = 0; j < Jij_vector.size(); i++){
+        if(j == i)
+            j++;
+        
             Jij_sum += -Jij_vector[i][j]
-                        * sigma_vector[i]
-                        * sigma_vector[k];
-        }
+                        * sigma_vector[j];
     }
     return Jij_sum;
 }
 
 
-vector<vector<int>>& Graph::Get_m_samples() {
+vector<pair<int, vector<int>>>& Graph::Get_m_samples() {
     return sigmai_vector;
 }
 
@@ -143,8 +142,9 @@ void Graph::Print_sigma_all() {
         Print_sigma_sample(sample);
 }
 
-void Graph::Print_sigma_sample(const vector<int>& sample) {
-    for(const auto& i : sample) {
+void Graph::Print_sigma_sample(const pair<int, vector<int>>& sample) {
+    cout << sample.first << " ";
+    for(const auto& i : sample.second) {
         cout << i << " ";
     }
     cout << endl;
