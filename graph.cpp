@@ -111,7 +111,7 @@ void Glauber(vector<vector<int>>& samples,
 double Jij_sum_calc(const vector<vector<double>>& Jij_vector,
         const vector<int>& sigma_vector, int i){
     double Jij_sum = 0;
-    for(int j = 0; j < Jij_vector.size(); i++){
+    for(int j = 0; j < Jij_vector.size(); j++){
         if(j == i)
             j++;
         
